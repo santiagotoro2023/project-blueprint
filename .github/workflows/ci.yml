@@ -58,6 +58,7 @@ jobs:
         working-directory: /tmp/ex
         run: |
           npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
           bash build.sh
           node .blueprint/tools/blueprint.mjs logo
           node .blueprint/tools/blueprint.mjs check
@@ -65,7 +66,6 @@ jobs:
         working-directory: /tmp/ex
         run: |
           node test/run.mjs
-          npx playwright install --with-deps chromium
           node test/run.mjs --browser
       - name: Helm chart and Kubernetes manifest
         working-directory: /tmp/ex

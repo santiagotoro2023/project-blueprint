@@ -400,8 +400,26 @@ write_site() {
   fi
   nginx -t >/dev/null 2>&1 || { nginx -t; die "nginx configuration is invalid, see above."; }
   systemctl enable --now nginx >/dev/null 2>&1 || true
+  local old_workers; old_workers="$(nginx_workers)"
   systemctl reload nginx
+  # The reload only signals nginx: wait until the old workers are gone, so the new
+  # settings (HTTP or HTTPS, port, certificate) are what answers when this script ends
+  local i w left
+  for i in $(seq 1 50); do
+    left=""
+    for w in $old_workers; do [ -d "/proc/$w" ] && left=1; done
+    [ -z "$left" ] && break
+    sleep 0.2
+  done
   ok "nginx reloaded"
+}
+
+# The worker processes of the running nginx (nothing when it does not run)
+nginx_workers() {
+  local master; master="$(cat /run/nginx.pid 2>/dev/null || true)"
+  [ -n "$master" ] && [ -d "/proc/$master" ] || return 0
+  if command -v pgrep >/dev/null 2>&1; then pgrep -P "$master" || true
+  else cat "/proc/$master/task/$master/children" 2>/dev/null || true; fi
 }
 
 # The address users should use. The web app offers to move their data there when it
