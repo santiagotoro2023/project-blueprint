@@ -13,6 +13,7 @@ permissions:
 jobs:
   tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,6 +24,7 @@ jobs:
   example:
     needs: tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -54,11 +56,16 @@ jobs:
             libs="$(node -e "const fs=require('fs');console.log(fs.readdirSync('library').filter(n=>JSON.parse(fs.readFileSync('library/'+n+'/element.json')).profiles.includes('${{ matrix.profile }}')).join(','))")"
             echo "LIBRARY=\"$libs\"" >> /tmp/ex/project.conf
           fi
-      - name: Install, build, check
+      - name: Install
+        working-directory: /tmp/ex
+        run: npm install --no-audit --no-fund
+      - name: Browser for the tests and the PNG logos
+        working-directory: /tmp/ex
+        timeout-minutes: 10
+        run: npx playwright install --with-deps chromium
+      - name: Build, check
         working-directory: /tmp/ex
         run: |
-          npm install --no-audit --no-fund
-          npx playwright install --with-deps chromium
           bash build.sh
           node .blueprint/tools/blueprint.mjs logo
           node .blueprint/tools/blueprint.mjs check
@@ -89,6 +96,7 @@ jobs:
   installer:
     needs: tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
