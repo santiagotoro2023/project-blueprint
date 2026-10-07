@@ -61,9 +61,15 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Browser for the tests and the PNG logos
         working-directory: /tmp/ex
-        timeout-minutes: 12
-        # A stalled download gets one more try instead of hanging the job
-        run: timeout 300 npx playwright install --with-deps chromium || timeout 300 npx playwright install --with-deps chromium
+        timeout-minutes: 10
+        # Only the browser: GitHub's Ubuntu runners already have its system libraries. apt
+        # (install-deps), whose mirrors can stall, only when Chromium does not start without it.
+        run: |
+          npx playwright install chromium
+          node -e "require('playwright').chromium.launch().then(b => b.close())" || {
+            echo 'Acquire::http::Timeout "30"; Acquire::https::Timeout "30"; Acquire::Retries "3";' | sudo tee /etc/apt/apt.conf.d/99-timeouts >/dev/null
+            npx playwright install-deps chromium
+          }
       - name: Build, check
         working-directory: /tmp/ex
         run: |
