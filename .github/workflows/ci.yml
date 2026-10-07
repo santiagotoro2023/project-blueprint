@@ -1,0 +1,113 @@
+# The blueprint's own pipeline: its tests, then example apps of both profiles, with no and
+# with all library elements, through the whole pipeline every app runs (spec/13-updating.md).
+name: Blueprint
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node test/run.mjs
+
+  example:
+    needs: tests
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [static, server]
+        library: [none, all]
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U test" --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      EX_STATIC_TEST_DATABASE_URL: postgres://test:test@localhost:5432/test
+      EX_SERVER_TEST_DATABASE_URL: postgres://test:test@localhost:5432/test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: New ${{ matrix.profile }} app (library ${{ matrix.library }})
+        run: |
+          node tools/blueprint.mjs new /tmp/ex --id ex-${{ matrix.profile }} --name Example --repo santiagotoro2023/ex-${{ matrix.profile }} \
+            --profile ${{ matrix.profile }} --tagline "An example app of the blueprint." --description "Made by the blueprint's pipeline to test every app's pipeline."
+          if [ "${{ matrix.library }}" = all ]; then
+            libs="$(node -e "const fs=require('fs');console.log(fs.readdirSync('library').filter(n=>JSON.parse(fs.readFileSync('library/'+n+'/element.json')).profiles.includes('${{ matrix.profile }}')).join(','))")"
+            echo "LIBRARY=\"$libs\"" >> /tmp/ex/project.conf
+          fi
+      - name: Install, build, check
+        working-directory: /tmp/ex
+        run: |
+          npm install --no-audit --no-fund
+          bash build.sh
+          node .blueprint/tools/blueprint.mjs logo
+          node .blueprint/tools/blueprint.mjs check
+      - name: Unit and browser tests
+        working-directory: /tmp/ex
+        run: |
+          node test/run.mjs
+          npx playwright install --with-deps chromium
+          node test/run.mjs --browser
+      - name: Helm chart and Kubernetes manifest
+        working-directory: /tmp/ex
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          curl -fsSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz | tar -xz kubeconform
+          helm lint --strict deploy/helm/ex-${{ matrix.profile }}
+          helm template t deploy/helm/ex-${{ matrix.profile }} --set ingress.enabled=true --set autoscaling.enabled=true --set networkPolicy.enabled=true \
+            | ./kubeconform -strict -summary -kubernetes-version 1.31.0
+          ./kubeconform -strict -summary -kubernetes-version 1.31.0 deploy/kubernetes/ex-${{ matrix.profile }}.yaml
+      - name: Compose
+        if: matrix.library == 'none'
+        working-directory: /tmp/ex
+        run: |
+          docker compose up -d --build --wait
+          curl -fsS http://localhost:8080/healthz
+          curl -fsS http://localhost:8080/site.json
+          curl -fsS http://localhost:8080/ | grep -q '<nav class="rail"'
+          docker compose down -v
+
+  installer:
+    needs: tests
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [static, server]
+        debian: ['12', '13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: New ${{ matrix.profile }} app, its previous release and the current one
+        run: |
+          node tools/blueprint.mjs new /tmp/ex --id ex-${{ matrix.profile }} --name Example --repo santiagotoro2023/ex-${{ matrix.profile }} \
+            --profile ${{ matrix.profile }} --tagline "An example app of the blueprint." --description "Made by the blueprint's pipeline to test every app's pipeline."
+          cd /tmp/ex && npm install --no-audit --no-fund && bash build.sh
+          cp ex-${{ matrix.profile }}-install.sh /tmp/previous-install.sh
+          echo 0.2.0 > VERSION
+          if [ "${{ matrix.profile }}" = server ]; then printf -- "-- A note on every item\nalter table items add column note text not null default '';\n" > server/migrations/0002_items_note.sql; fi
+          bash build.sh
+      - name: Install, update from 0.1.0, back up, restore, remove on Debian ${{ matrix.debian }}
+        working-directory: /tmp/ex
+        run: bash test/installer/run.sh debian:${{ matrix.debian }} /tmp/previous-install.sh
