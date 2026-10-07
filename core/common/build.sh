@@ -38,6 +38,11 @@ pack_tree() {
   echo '}'
 }
 
+# The app's additions to the installer, with its version. The token is written in two parts,
+# so that rendering this file does not replace it; no other placeholder may be left over.
+APP_HOOKS="$(sed "s/@@VER""SION@@/${VERSION}/g" installer/app.sh)"
+if printf '%s' "$APP_HOOKS" | grep -E '@@[A-Z_]+@@' >/dev/null; then echo "installer/app.sh: unknown placeholder $(printf '%s' "$APP_HOOKS" | grep -oE '@@[A-Z_]+@@' | head -1)" >&2; exit 1; fi
+
 @@IF server@@
 # The app server: server/, package.json and only the production dependencies
 STAGE="$(mktemp -d)"
@@ -50,7 +55,7 @@ rm -f "$STAGE/package-lock.json"
   cat installer/core/head.sh
   echo
   echo '# ------------------------------------------------------------------ App specific (installer/app.sh)'
-  sed "s/@@VERSION@@/${VERSION}/g" installer/app.sh
+  printf '%s\n' "$APP_HOOKS"
   echo
   pack_tree write_files src . ! -name package.json
 @@IF server@@
