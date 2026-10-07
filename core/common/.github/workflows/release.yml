@@ -55,8 +55,9 @@ jobs:
       - name: Unit tests
         run: node test/run.mjs
       - name: Browser for the tests
-        timeout-minutes: 10
-        run: npx playwright install --with-deps chromium
+        timeout-minutes: 12
+        # A stalled download gets one more try instead of hanging the job
+        run: timeout 300 npx playwright install --with-deps chromium || timeout 300 npx playwright install --with-deps chromium
       - name: Browser tests
         run: node test/run.mjs --browser
       - name: Helm chart and Kubernetes manifest
