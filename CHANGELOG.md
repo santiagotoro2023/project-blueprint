@@ -3,6 +3,14 @@
 Every version lists what changed and, under "Projects must", what a project has to do when it
 updates to it (`node .blueprint/tools/blueprint.mjs update` prints these sections).
 
+## 1.1.1
+
+- The installer test (`test/installer/run.sh`) installs on a port that is not the app's own
+  default: 8443, or 9443 when `APP_PORT` is 8443. Before, an app with the default port 8443 could
+  not pass "the port is kept".
+
+Projects must: nothing (update with `node .blueprint/tools/blueprint.mjs update --to 1.1.1`).
+
 ## 1.1.0
 
 Library elements for server apps with accounts, sensitive data and background work, and system
