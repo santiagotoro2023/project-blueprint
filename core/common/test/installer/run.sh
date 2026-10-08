@@ -45,6 +45,10 @@ fingerprint() { vm "openssl x509 -in /opt/@@APP_ID@@/tls/@@APP_ID@@.crt -noout -
 # 1. Fresh install on a custom port
 vm "bash /root/$SCRIPT --port 8443" > /tmp/$NAME.log 2>&1 || { cat /tmp/$NAME.log; fail "install"; }
 ok "install"
+@@IF lib:auth@@
+grep -A1 "create the first administrator with this setup code" /tmp/$NAME.log | tail -1 | grep -Eq '^ +[0-9a-f]{6}-[0-9a-f]{6}-[0-9a-f]{6}$' || { cat /tmp/$NAME.log; fail "the installer shows the setup code"; }
+ok "the installer shows the setup code of the first administrator"
+@@END@@
 get 8443 / | grep '<nav class="rail"' >/dev/null || fail "the app answers over HTTPS"
 ok "the app answers over HTTPS on port 8443"
 get 8443 /site.json | grep '"version": *"' >/dev/null || fail "site.json"
@@ -90,6 +94,15 @@ vm "systemctl is-active --quiet @@APP_ID@@" || fail "the service runs"
 ok "the service @@APP_ID@@ runs"
 vm "systemctl is-enabled --quiet @@APP_ID@@-backup.timer" || fail "daily backup timer"
 ok "daily backup timer"
+@@IF packages@@
+for p in @@APP_PACKAGES@@; do vm "dpkg -s $p >/dev/null 2>&1" || fail "package $p installed"; done
+ok "packages installed: @@APP_PACKAGES@@"
+@@END@@
+@@IF lib:secrets@@
+key="$(vm "cat /var/lib/@@APP_ID@@/@@APP_ID@@.key")"
+[ "$(vm "stat -c '%a %U:%G' /var/lib/@@APP_ID@@/@@APP_ID@@.key")" = "640 root:@@APP_ID@@" ] || fail "the key file belongs to root, readable by the service"
+ok "key for the stored secrets in /var/lib/@@APP_ID@@ (640 root:@@APP_ID@@)"
+@@END@@
 vm "runuser -u postgres -- psql -d @@APP_ID@@ -Atqc 'create table if not exists installer_test (v text); insert into installer_test values (\$\$before\$\$)'" >/dev/null || fail "write to the database"
 vm "bash /opt/@@APP_ID@@/@@APP_ID@@-install.sh --backup" > /tmp/$NAME.log 2>&1 || { cat /tmp/$NAME.log; fail "--backup"; }
 backup="$(vm "cat /var/backups/@@APP_ID@@/.last")"
@@ -107,6 +120,10 @@ ok "the app runs after the restore"
 vm "bash /opt/@@APP_ID@@/@@APP_ID@@-install.sh" > /tmp/$NAME.log 2>&1 || fail "update"
 grep -q "Backing up the database before the update" /tmp/$NAME.log || fail "a backup before every update"
 ok "a backup before every update"
+@@IF lib:secrets@@
+[ "$(vm "cat /var/lib/@@APP_ID@@/@@APP_ID@@.key")" = "$key" ] || fail "the update keeps the key"
+ok "the update keeps the key"
+@@END@@
 vm "bash /opt/@@APP_ID@@/@@APP_ID@@-install.sh --list-backups" | grep '\.dump' >/dev/null || fail "--list-backups"
 ok "--list-backups"
 @@END@@
@@ -119,12 +136,19 @@ ok "--uninstall removes the app"
 @@IF server@@
 [ "$(vm "runuser -u postgres -- psql -d @@APP_ID@@ -Atqc 'select v from installer_test'")" = "before" ] || fail "--uninstall keeps the database"
 ok "--uninstall keeps the database"
+@@IF lib:secrets@@
+[ "$(vm "cat /var/lib/@@APP_ID@@/@@APP_ID@@.key")" = "$key" ] || fail "--uninstall keeps the key"
+ok "--uninstall keeps the key"
+@@END@@
 vm "bash /root/$SCRIPT" >/dev/null 2>&1 || fail "install again"
 get 8080 /healthz >/dev/null || fail "a new install uses the kept database"
 ok "a new install uses the kept database"
 vm "bash /opt/@@APP_ID@@/@@APP_ID@@-install.sh --uninstall --purge" >/dev/null 2>&1 || fail "--uninstall --purge"
 vm "runuser -u postgres -- psql -Atqc \"select count(*) from pg_database where datname = '@@APP_ID@@'\"" | grep -x 0 >/dev/null || fail "--purge deletes the database"
 vm "test ! -e /var/backups/@@APP_ID@@" || fail "--purge deletes the backups"
+@@IF lib:secrets@@
+vm "test ! -e /var/lib/@@APP_ID@@" || fail "--purge deletes the key"
+@@END@@
 ok "--uninstall --purge deletes database and backups"
 @@END@@
 

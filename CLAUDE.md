@@ -13,8 +13,9 @@ blueprint itself: changing it changes every app on its next update.
   element (`library/<name>/`), opt-in per app.
 - **Design language stays as it is.** New components use only the tokens of base.css and the
   type scale; their CSS selectors start with their own class.
-- `@@PLACEHOLDER@@` and `@@IF static@@` / `@@IF server@@` / `@@ELSE@@` / `@@END@@` work in every
-  file of `core/`, `template/` and `library/`; markers stand alone on their line.
+- `@@PLACEHOLDER@@` and `@@IF static@@` / `@@IF server@@` / `@@IF lib:<name>@@` / `@@IF packages@@` /
+  `@@ELSE@@` / `@@END@@` work in every file of `core/`, `template/` and `library/`; markers stand
+  alone on their line. A core file that renders empty is not written.
 - **Spec and code agree.** A change of behavior changes the spec chapter in the same commit
   (the tests compare tokens and headers).
 - **Prove it:** `node test/run.mjs`; then generate an example app of the affected profile(s)

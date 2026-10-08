@@ -50,12 +50,14 @@ jobs:
           node-version: 22
       - name: New ${{ matrix.profile }} app (library ${{ matrix.library }})
         run: |
-          node tools/blueprint.mjs new /tmp/ex --id ex-${{ matrix.profile }} --name Example --repo santiagotoro2023/ex-${{ matrix.profile }} \
-            --profile ${{ matrix.profile }} --tagline "An example app of the blueprint." --description "Made by the blueprint's pipeline to test every app's pipeline."
+          extra=()
           if [ "${{ matrix.library }}" = all ]; then
             libs="$(node -e "const fs=require('fs');console.log(fs.readdirSync('library').filter(n=>JSON.parse(fs.readFileSync('library/'+n+'/element.json')).profiles.includes('${{ matrix.profile }}')).join(','))")"
-            echo "LIBRARY=\"$libs\"" >> /tmp/ex/project.conf
+            extra+=(--library "$libs")
+            [ "${{ matrix.profile }}" = server ] && extra+=(--packages "openssh-client")
           fi
+          node tools/blueprint.mjs new /tmp/ex --id ex-${{ matrix.profile }} --name Example --repo santiagotoro2023/ex-${{ matrix.profile }} \
+            --profile ${{ matrix.profile }} --tagline "An example app of the blueprint." --description "Made by the blueprint's pipeline to test every app's pipeline." "${extra[@]}"
       - name: Install
         working-directory: /tmp/ex
         run: npm install --no-audit --no-fund
@@ -91,7 +93,7 @@ jobs:
             | ./kubeconform -strict -summary -kubernetes-version 1.31.0
           ./kubeconform -strict -summary -kubernetes-version 1.31.0 deploy/kubernetes/ex-${{ matrix.profile }}.yaml
       - name: Compose
-        if: matrix.library == 'none'
+        if: matrix.library == 'none' || matrix.profile == 'server'
         working-directory: /tmp/ex
         run: |
           docker compose up -d --build --wait
@@ -109,6 +111,10 @@ jobs:
       matrix:
         profile: [static, server]
         debian: ['12', '13']
+        include:
+          - profile: server
+            debian: '12'
+            library: all
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -116,8 +122,10 @@ jobs:
           node-version: 22
       - name: New ${{ matrix.profile }} app, its previous release and the current one
         run: |
+          extra=()
+          [ "${{ matrix.library }}" = all ] && extra+=(--library auth,audit,jobs,secrets,stats --packages openssh-client)
           node tools/blueprint.mjs new /tmp/ex --id ex-${{ matrix.profile }} --name Example --repo santiagotoro2023/ex-${{ matrix.profile }} \
-            --profile ${{ matrix.profile }} --tagline "An example app of the blueprint." --description "Made by the blueprint's pipeline to test every app's pipeline."
+            --profile ${{ matrix.profile }} --tagline "An example app of the blueprint." --description "Made by the blueprint's pipeline to test every app's pipeline." "${extra[@]}"
           cd /tmp/ex && npm install --no-audit --no-fund && bash build.sh
           cp ex-${{ matrix.profile }}-install.sh /tmp/previous-install.sh
           echo 0.2.0 > VERSION
