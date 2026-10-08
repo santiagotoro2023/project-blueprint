@@ -5,9 +5,10 @@ updates to it (`node .blueprint/tools/blueprint.mjs update` prints these section
 
 ## 1.1.1
 
-- The installer test (`test/installer/run.sh`) installs on a port that is not the app's own
-  default: 8443, or 9443 when `APP_PORT` is 8443. Before, an app with the default port 8443 could
-  not pass "the port is kept".
+- The installer test (`test/installer/run.sh`) no longer assumes PacketPilot's ports: it installs on
+  a port that is not the app's own default (8443, or 9443 when `APP_PORT` is 8443), and after
+  `--uninstall` it expects the new install on `APP_PORT` instead of 8080. Before, an app with
+  another default port could not pass "the port is kept" and "a new install uses the kept database".
 
 Projects must: nothing (update with `node .blueprint/tools/blueprint.mjs update --to 1.1.1`).
 

@@ -142,7 +142,7 @@ ok "--uninstall keeps the database"
 ok "--uninstall keeps the key"
 @@END@@
 vm "bash /root/$SCRIPT" >/dev/null 2>&1 || fail "install again"
-get 8080 /healthz >/dev/null || fail "a new install uses the kept database"
+get @@APP_PORT@@ /healthz >/dev/null || fail "a new install uses the kept database"
 ok "a new install uses the kept database"
 vm "bash /opt/@@APP_ID@@/@@APP_ID@@-install.sh --uninstall --purge" >/dev/null 2>&1 || fail "--uninstall --purge"
 vm "runuser -u postgres -- psql -Atqc \"select count(*) from pg_database where datname = '@@APP_ID@@'\"" | grep -x 0 >/dev/null || fail "--purge deletes the database"
