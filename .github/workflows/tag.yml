@@ -1,0 +1,29 @@
+# Tags every new blueprint version: when BLUEPRINT_VERSION on main names a version without a
+# tag yet, the tag vX.Y.Z is made on that commit (spec/13-updating.md, "Release").
+name: Tag
+
+on:
+  push:
+    branches: [main]
+    paths: [BLUEPRINT_VERSION]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Tag the version
+        run: |
+          v="v$(cat BLUEPRINT_VERSION)"
+          if git rev-parse -q --verify "refs/tags/$v" >/dev/null; then echo "$v exists"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$v" -m "Blueprint ${v#v}"
+          git push origin "$v"

@@ -22,5 +22,5 @@ blueprint itself: changing it changes every app on its next update.
   (`node tools/blueprint.mjs new /tmp/ex …`) and run its `build.sh`, check, unit and browser tests,
   and `bash test/installer/run.sh debian:12` when installer, server or deployment changed. CI does all
   of it for both profiles, with no and with all library elements.
-- **Release:** a `CHANGELOG.md` entry, raise `BLUEPRINT_VERSION`, tag `vX.Y.Z` on main. Then update
+- **Release:** a `CHANGELOG.md` entry, raise `BLUEPRINT_VERSION`; on main the workflow `tag.yml` tags `vX.Y.Z`. Then update
   PacketPilot (the reference app) first.
