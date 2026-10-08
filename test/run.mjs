@@ -17,6 +17,7 @@ const test = async (name, fn) => {
   catch (e) { failed++; console.log(`\x1b[31m ✗ \x1b[0m ${name}\n    ${String(e.stack || e.message).split('\n').slice(0, 6).join('\n    ')}`); }
 };
 const vars = profile => ({ ...variables({ APP_ID: 'demo-app', APP_NAME: 'Demo', APP_TAGLINE: 'A demo.', APP_DESCRIPTION: 'Twenty characters of description.', APP_REPO: 'owner/demo-app', APP_PROFILE: profile, APP_PORT: '8080', APP_KEYWORDS: 'demo', APP_DATA_NOTE: 'Data lives here.', LOGO_PATTERN: 'bars', LOGO_COLORS: 'blue' }, { version: '1.2.3', blueprintVersion: '9.9.9' }), LOGO_RAIL_SVG: '<svg/>', FAVICON_HREF: 'data:x', LIBRARY: '', LIBRARY_CSS: '' });
+const varsWith = (profile, extra) => ({ ...vars(profile), ...extra });
 
 // ---------------------------------------------------------------- Rendering
 await test('placeholders and profile blocks', () => {
@@ -26,6 +27,10 @@ await test('placeholders and profile blocks', () => {
   assert.throws(() => renderText('x @@NOPE@@', vars('static')), /unknown placeholder/);
   assert.throws(() => renderText('text @@IF server@@', vars('static')), /must stand alone/);
   assert.throws(() => renderText('@@IF server@@\nx', vars('static')), /without @@END@@/);
+  const lib = '@@IF lib:auth@@\na\n@@ELSE@@\nb\n@@END@@\n@@IF packages@@\np @@APP_PACKAGES@@\n@@END@@\nz';
+  assert.equal(renderText(lib, varsWith('server', { LIBRARY: 'stats,auth', APP_PACKAGES: 'ansible-core' })), 'a\np ansible-core\nz');
+  assert.equal(renderText(lib, varsWith('server', { LIBRARY: 'stats', APP_PACKAGES: '' })), 'b\nz');
+  assert.equal(renderText('@@IF server@@\n@@IF lib:jobs@@\nj\n@@END@@\n@@END@@\nz', varsWith('server', { LIBRARY: 'jobs' })), 'j\nz', 'nested');
 });
 
 await test('every file of core, template and library renders in both profiles', () => {
@@ -35,6 +40,9 @@ await test('every file of core, template and library renders in both profiles', 
   for (const el of fs.readdirSync(path.join(ROOT, 'library'))) {
     for (const f of walk(path.join(ROOT, 'library', el, 'files'))) renderText(read(`library/${el}/files/${f}`), vars('server'), f);
   }
+  // and with every element and packages switched on
+  const all = varsWith('server', { LIBRARY: fs.readdirSync(path.join(ROOT, 'library')).join(','), APP_PACKAGES: 'ansible-core openssh-client' });
+  for (const layer of ['core', 'template']) for (const f of layerFiles(ROOT, layer, all)) if (!f.binary) renderText(fs.readFileSync(f.src, 'utf8'), all, f.src);
 });
 
 await test('project.conf: parsing and every rule', () => {
@@ -42,6 +50,8 @@ await test('project.conf: parsing and every rule', () => {
   assert.equal(c.APP_ID, 'ok-app');
   assert.throws(() => parseConf('APP_ID=no-quotes'), /expected KEY="value"/);
   const errs = checkConf({ APP_ID: 'Bad Id', APP_TAGLINE: 'Wow!', LIBRARY: 'Stats' });
+  assert.ok(checkConf({ APP_PROFILE: 'static', APP_PACKAGES: 'curl' }).some(e => /server profile only/.test(e)));
+  assert.ok(checkConf({ APP_PROFILE: 'server', APP_PACKAGES: 'curl;rm' }).some(e => e.startsWith('APP_PACKAGES')));
   assert.ok(errs.some(e => e.startsWith('APP_ID')) && errs.some(e => e.startsWith('APP_TAGLINE')) && errs.some(e => e.startsWith('LIBRARY')) && errs.some(e => e.includes('APP_REPO is missing')));
 });
 
