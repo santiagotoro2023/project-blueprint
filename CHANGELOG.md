@@ -10,6 +10,8 @@ updates to it (`node .blueprint/tools/blueprint.mjs update` prints these section
   check compared `192.168.1.5:8443` (the browser's `Origin`) with `192.168.1.5` and refused every
   change ("Requests from other sites are not allowed."), the first sign-in included. The installer
   test now sends a change with an `Origin` through nginx.
+- The workflows run on `ubuntu-24.04` instead of `ubuntu-latest`: GitHub moved `ubuntu-latest` to
+  Ubuntu 26.04, where the pinned Playwright cannot install Chromium, so every browser test failed.
 
 Projects must: nothing; update and release, and existing installations get the fixed nginx site on
 their next update (`--update`).
